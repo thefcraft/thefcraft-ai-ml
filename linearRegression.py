@@ -1,4 +1,5 @@
 import numpy as np
+import torch # for linearRegressioncuda
 
 class linearRegression:
     def __init__(self, fit_intercept=True):
@@ -34,6 +35,32 @@ class linearRegression:
             eq += f"{i} x{idx+1} + "
         eq += f"({self.b})"
         return eq
+
+class linearRegressioncuda: # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    def __init__(self, fit_intercept=True):
+        self.M:torch.Tensor = None
+        self.b:torch.Tensor = None
+        self.fit_intercept = fit_intercept
+    
+    def fit(self, X:torch.Tensor, Y:torch.Tensor):
+        with torch.no_grad():
+            n=len(X)   
+            avg_y = Y.mean()
+            avg_yxj = (Y.unsqueeze(dim=1) * X).mean(dim=0)
+            avg_xj = X.mean(dim=0)
+            avg_xjxj = torch.mm(X.T, X) / n
+
+            A = n * torch.outer(avg_xj, avg_xj) - avg_xjxj
+            B = n * avg_y * avg_xj - avg_yxj
+
+            # least_squares = lambda A, B: torch.matmul(torch.linalg.pinv(A), B)
+            self.M = torch.matmul(torch.linalg.pinv(A), B)
+            self.b = avg_y - self.M.dot(avg_xj)
+        
+    def predict(self,X:torch.Tensor):
+        # return (X*self.M).sum(axis=1)+self.b
+        with torch.no_grad():
+            return torch.matmul(X, self.M) + self.b
 
 if __name__ == "__main__":
     from sklearn.datasets import make_regression
