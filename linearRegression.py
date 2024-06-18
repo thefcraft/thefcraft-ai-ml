@@ -1,6 +1,29 @@
 import numpy as np
 import torch # for linearRegressioncuda
 
+class linearRegressionGradientDescent:
+    def __init__(self, fit_intercept=True):
+        self.M:np.ndarray = None
+        self.b:np.ndarray = None
+        self.fit_intercept = fit_intercept
+        if not fit_intercept: raise NotImplementedError("not fit intercept is not implemented yet")
+    
+    def fit(self, X:np.ndarray, Y:np.ndarray, epoch=100, lr=0.0001):
+        M = np.random.random(X.shape[1])
+        b = np.random.random(1)
+        y = lambda x : (M * x).sum(axis=1) + b
+        for epoch in range(epoch+1):
+            errors = Y - y(X)
+            dEdM = -2 * errors.dot(X)
+            dEdB = -2 * errors.mean()
+            M -= dEdM * lr
+            b -= dEdB * lr
+        self.M = M
+        self.b = b
+        
+    def predict(self,X:np.ndarray):
+        return (self.M * X).sum(axis=1) + self.b
+        
 class linearRegression:
     def __init__(self, fit_intercept=True):
         self.M:np.ndarray = None
@@ -8,21 +31,25 @@ class linearRegression:
         self.fit_intercept = fit_intercept
     
     def fit(self, X:np.ndarray, Y:np.ndarray):
-        if self.fit_intercept == True:
+        if not self.fit_intercept:
             # TODO: use y = mx for solving the problem not y = mx+b
+            raise NotImplementedError("not fit intercept is not implemented yet")
             ...
             
         n=len(X)   
         avg_y = Y.mean()
-        avg_yxj = np.mean(Y[:, np.newaxis] * X, axis=0)  # avg_yxj = np.array([(Y*X[:, i]).mean() for i in range(n_features)]) 
         avg_xj = X.mean(axis=0)
+        avg_yxj = np.mean(Y[:, np.newaxis] * X, axis=0)  # avg_yxj = np.array([(Y*X[:, i]).mean() for i in range(n_features)]) 
         avg_xjxj = np.dot(X.T, X) / n    # avg_xjxj = np.sum([np.outer(X[i], X[i])/n for i in range(n)], axis=0)
 
-        A = n * np.outer(avg_xj, avg_xj) - avg_xjxj # A = np.array([[n*avg_xj[jj]*avg_xj[j] - avg_xjxj[jj][j] for jj in range(n_features)] for j in range(n_features)])
-        B = n * avg_y * avg_xj - avg_yxj  # B = np.array([n*avg_y*avg_xj[j]-avg_yxj[j] for j in range(n_features)])
+        # BUG FIX i multiply the A and B by n so it gives errors....
+        A = np.outer(avg_xj, avg_xj) - avg_xjxj # A = np.array([[n*avg_xj[jj]*avg_xj[j] - avg_xjxj[jj][j] for jj in range(n_features)] for j in range(n_features)])
+        B = avg_y * avg_xj - avg_yxj  # B = np.array([n*avg_y*avg_xj[j]-avg_yxj[j] for j in range(n_features)])
 
-        # M = np.linalg.solve(A, B)
-        self.M, _, _, _ = np.linalg.lstsq(A, B, rcond=None) # Numerical Stability: For numerical stability, it's a good idea to use np.linalg.lstsq instead of directly solving the system of equations. This function is better suited for solving over-determined systems, and it provides a more stable solution, especially when the matrix is ill-conditioned.
+        M = np.linalg.solve(A, B)
+        # Numerical Stability: For numerical stability, it's a good idea to use np.linalg.lstsq instead of directly solving the system of equations. 
+        # This function is better suited for solving over-determined systems, and it provides a more stable solution, especially when the matrix is ill-conditioned.
+        # self.M, _, _, _ = np.linalg.lstsq(A, B, rcond=None) 
         self.b = avg_y - np.dot(self.M, avg_xj)  # b = avg_y - np.array([M[j]*avg_xj[j] for j in range(n_features)]).sum()
         
     def predict(self,X:np.ndarray):
@@ -41,6 +68,7 @@ class linearRegressioncuda: # device = torch.device("cuda" if torch.cuda.is_avai
         self.M:torch.Tensor = None
         self.b:torch.Tensor = None
         self.fit_intercept = fit_intercept
+        if not fit_intercept: raise NotImplementedError("fit intercept is not implemented yet")
     
     def fit(self, X:torch.Tensor, Y:torch.Tensor):
         with torch.no_grad():
@@ -50,11 +78,12 @@ class linearRegressioncuda: # device = torch.device("cuda" if torch.cuda.is_avai
             avg_xj = X.mean(dim=0)
             avg_xjxj = torch.mm(X.T, X) / n
 
-            A = n * torch.outer(avg_xj, avg_xj) - avg_xjxj
-            B = n * avg_y * avg_xj - avg_yxj
+            A = torch.outer(avg_xj, avg_xj) - avg_xjxj
+            B = avg_y * avg_xj - avg_yxj
 
             # least_squares = lambda A, B: torch.matmul(torch.linalg.pinv(A), B)
-            self.M = torch.matmul(torch.linalg.pinv(A), B)
+            # self.M = torch.matmul(torch.linalg.pinv(A), B)
+            self.M = torch.linalg.solve(A, B)
             self.b = avg_y - self.M.dot(avg_xj)
         
     def predict(self,X:torch.Tensor):
